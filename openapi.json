@@ -1,0 +1,1754 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "OpenAsy Backups API",
+    "version": "0.1.0",
+    "summary": "Whether your backups ran, how late they are, and whether anyone has restored one.",
+    "description": "Every screen of backups uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nBackups tracks backup jobs; it makes no backups. Jobs report their runs and restore tests with `BACKUPS_INGEST_TOKEN`. Everything else takes the session of a signed-in person or an API token, and each operation names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
+    "license": {
+      "name": "AGPL-3.0-only",
+      "identifier": "AGPL-3.0-only"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This backups"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Reports",
+      "description": "What jobs and restore tests send."
+    },
+    {
+      "name": "Jobs",
+      "description": "What makes backups, and how it is doing."
+    },
+    {
+      "name": "Settings",
+      "description": "When a job counts as late, failing or untested."
+    },
+    {
+      "name": "Product",
+      "description": "Version and overview of this backups."
+    }
+  ],
+  "paths": {
+    "/api/v1/runs": {
+      "post": {
+        "operationId": "reportRun",
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Report a run",
+        "security": [
+          {
+            "ingestToken": []
+          },
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Reports one finished run of a job. The body is our own JSON, `{ job, startedAt, endedAt, status, snapshotId?, sizeBytes?, filesNew?, filesChanged?, error? }`, or what the tool prints: the summary of `restic backup --json` (the last line is found among the lines it prints), or a Velero `Backup` resource once its phase is Completed, PartiallyFailed or Failed. A job nobody defined is refused unless an admin allows reports to create jobs. The same snapshot twice is the same run.\n\n```bash\nrestic backup --json /srv | tail -n 1 | curl -sf -X POST -H \"Authorization: Bearer $BACKUPS_INGEST_TOKEN\" \\\n  -H 'content-type: application/json' --data-binary @- \"https://backups.example.com/api/v1/runs?job=files\"\nkubectl -n velero get backup nightly-20261022 -o json | curl -sf -X POST -H \"Authorization: Bearer $BACKUPS_INGEST_TOKEN\" \\\n  -H 'content-type: application/json' --data-binary @- \"https://backups.example.com/api/v1/runs?job=cluster\"\n```\n\nThe body may be gzipped, up to 4 MiB unpacked.\n\nTakes BACKUPS_INGEST_TOKEN, or an API token with the editor role.",
+        "parameters": [
+          {
+            "name": "job",
+            "in": "query",
+            "required": false,
+            "description": "The job's name, when the body does not say.",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "tool",
+            "in": "query",
+            "required": false,
+            "description": "restic, velero or other. Set when auto-create makes the job.",
+            "schema": {
+              "$ref": "#/components/schemas/Tool"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Our own report, a restic summary or a Velero Backup."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The snapshot was reported before; nothing changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Kept. `x-job-state` holds the job's state now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "editor"
+      }
+    },
+    "/api/v1/restore-tests": {
+      "post": {
+        "operationId": "reportRestoreTest",
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Report a restore test",
+        "security": [
+          {
+            "ingestToken": []
+          },
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "A backup nobody has restored is a hope. Say that a restore was tried, and whether it worked. Automated tests send it from the script that runs them; a person records a manual one here or in the UI.\n\nTakes BACKUPS_INGEST_TOKEN, or an API token with the editor role.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewRestoreTest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Kept.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreTest"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "editor"
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "operationId": "listJobs",
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "List jobs",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the viewer role.",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "Only jobs in this state.",
+            "schema": {
+              "$ref": "#/components/schemas/JobState"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The previous page's nextCursor.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Jobs by name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      },
+      "post": {
+        "operationId": "createJob",
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Define a job",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "A job is something that makes backups: restic, Velero or a script. Backups tracks it; it does not run it.\n\nNeeds the admin role.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewJob"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin"
+      }
+    },
+    "/api/v1/jobs/{id}": {
+      "get": {
+        "operationId": "getJob",
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get a job",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the viewer role.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The job's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job and how it is doing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      },
+      "patch": {
+        "operationId": "updateJob",
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Change a job",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "The name cannot change, because reports use it.\n\nNeeds the admin role.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The job's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateJob"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The job.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin"
+      },
+      "delete": {
+        "operationId": "deleteJob",
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Delete a job",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Deletes its runs and restore tests.\n\nNeeds the admin role.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The job's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin"
+      }
+    },
+    "/api/v1/jobs/{id}/runs": {
+      "get": {
+        "operationId": "listJobRuns",
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "List a job's runs",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the viewer role.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The job's id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The previous page's nextCursor.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/jobs/{id}/restore-tests": {
+      "get": {
+        "operationId": "listJobRestoreTests",
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "List a job's restore tests",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the viewer role.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The job's id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The previous page's nextCursor.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreTestList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get the settings",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "The settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      },
+      "put": {
+        "operationId": "updateSettings",
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Change the settings",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the admin role.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "admin"
+      }
+    },
+    "/api/v1/summary": {
+      "get": {
+        "operationId": "getSummary",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Overview",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Jobs by state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Summary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "operationId": "getVersion",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Version",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The running version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "operationId": "listProducts",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Other products of this install",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "From OPENASY_PRODUCTS, for the product switcher.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "liveness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Liveness",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The process is running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readiness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Readiness",
+        "description": "Ready while the database answers.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Ready to serve.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The database is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Prometheus metrics",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Metrics in the Prometheus text format.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-openasy-session",
+        "description": "The browser session after signing in (`openasy-session` when backups runs on plain http://localhost). Requests that change something must come from the backups origin."
+      },
+      "apiToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An API token created under Settings \u2192 API tokens (`oa_backups_...`): one role, always an expiry (ADR 0003)."
+      },
+      "adminToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Only when backups is started by its tests or a local script: one shared token with the admin role. A production install does not have it."
+      },
+      "ingestToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "`BACKUPS_INGEST_TOKEN`: for the jobs. It can send runs and restore tests, nothing else."
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "An error, as RFC 9457 Problem Details.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid-token",
+              "invalid-json",
+              "invalid-body",
+              "conflict",
+              "invalid-report",
+              "unknown-job",
+              "not-found",
+              "not-configured",
+              "payload-too-large",
+              "internal-error",
+              "unauthenticated",
+              "invalid-credentials",
+              "mfa-required",
+              "mfa-setup-required",
+              "forbidden",
+              "cross-site",
+              "rate-limited"
+            ],
+            "description": "Stable; match on this."
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "ProductLink": {
+        "type": "object",
+        "required": [
+          "id",
+          "url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The product, as OpenAsy names it.",
+            "examples": [
+              "infrastructure"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The address people open it at.",
+            "examples": [
+              "https://infra.example.com"
+            ]
+          }
+        }
+      },
+      "ProductList": {
+        "type": "object",
+        "required": [
+          "products"
+        ],
+        "properties": {
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductLink"
+            }
+          }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "required": [
+          "product",
+          "version"
+        ],
+        "properties": {
+          "product": {
+            "const": "backups"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "Tool": {
+        "type": "string",
+        "enum": [
+          "restic",
+          "velero",
+          "other"
+        ]
+      },
+      "JobState": {
+        "type": "string",
+        "enum": [
+          "healthy",
+          "late",
+          "at-risk",
+          "failing",
+          "untested",
+          "unknown"
+        ],
+        "description": "`failing`: the last runs all failed. `at-risk`: the last backup is older than the RPO. `late`: older than one and a half cadences. `untested`: no successful restore test within the stale period. `unknown`: nothing reported. Checked in this order."
+      },
+      "Job": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "tool",
+          "source",
+          "location",
+          "cadenceHours",
+          "rpoHours",
+          "retention",
+          "owner",
+          "tags",
+          "state",
+          "reason",
+          "lastRun",
+          "lastSuccessAt",
+          "lastRestoreTest",
+          "successRate30d",
+          "sizeBytes",
+          "createdAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tool": {
+            "$ref": "#/components/schemas/Tool"
+          },
+          "source": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "cadenceHours": {
+            "type": "integer"
+          },
+          "rpoHours": {
+            "type": "integer",
+            "description": "How many hours of data may be lost."
+          },
+          "retention": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the job is in this state, in a sentence."
+          },
+          "lastRun": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "endedAt",
+                  "status"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "endedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "success",
+                      "warning",
+                      "failed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "lastSuccessAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "format": "date-time"
+              }
+            ],
+            "description": "The last run that was not failed."
+          },
+          "lastRestoreTest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "testedAt",
+                  "ok",
+                  "verifiedBy",
+                  "ageDays"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "testedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "verifiedBy": {
+                    "type": "string",
+                    "enum": [
+                      "automated",
+                      "manual"
+                    ]
+                  },
+                  "ageDays": {
+                    "type": "integer"
+                  }
+                }
+              }
+            ]
+          },
+          "successRate30d": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "description": "Runs that were not failed over all runs in 30 days, 0 to 1."
+          },
+          "sizeBytes": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "description": "Size of the last run that reported one."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "JobList": {
+        "type": "object",
+        "required": [
+          "jobs"
+        ],
+        "properties": {
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Pass the previous page's nextCursor to get the next page."
+          }
+        }
+      },
+      "NewJob": {
+        "type": "object",
+        "required": [
+          "name",
+          "cadenceHours",
+          "rpoHours"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+          },
+          "tool": {
+            "$ref": "#/components/schemas/Tool",
+            "default": "other"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "cadenceHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8760
+          },
+          "rpoHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8760,
+            "description": "Not less than cadenceHours."
+          },
+          "retention": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "owner": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{1,32}$"
+            }
+          }
+        }
+      },
+      "UpdateJob": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "$ref": "#/components/schemas/Tool",
+            "default": "other"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "cadenceHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8760
+          },
+          "rpoHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8760,
+            "description": "Not less than cadenceHours."
+          },
+          "retention": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "owner": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{1,32}$"
+            }
+          }
+        },
+        "minProperties": 1
+      },
+      "Run": {
+        "type": "object",
+        "required": [
+          "id",
+          "startedAt",
+          "endedAt",
+          "status",
+          "snapshotId",
+          "sizeBytes",
+          "filesNew",
+          "filesChanged",
+          "error"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "warning",
+              "failed"
+            ]
+          },
+          "snapshotId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "sizeBytes": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "filesNew": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "filesChanged": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "Passwords and tokens are masked."
+          }
+        }
+      },
+      "RunList": {
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Run"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Pass the previous page's nextCursor to get the next page."
+          }
+        }
+      },
+      "NewRestoreTest": {
+        "type": "object",
+        "required": [
+          "job",
+          "testedAt",
+          "ok",
+          "verifiedBy"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "job": {
+            "type": "string"
+          },
+          "testedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "durationSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "snapshotId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "verifiedBy": {
+            "type": "string",
+            "enum": [
+              "automated",
+              "manual"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      },
+      "RestoreTest": {
+        "type": "object",
+        "required": [
+          "id",
+          "testedAt",
+          "ok",
+          "durationSeconds",
+          "snapshotId",
+          "verifiedBy",
+          "notes",
+          "reportedBy"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "testedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "durationSeconds": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "snapshotId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "verifiedBy": {
+            "type": "string",
+            "enum": [
+              "automated",
+              "manual"
+            ]
+          },
+          "notes": {
+            "type": "string"
+          },
+          "reportedBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        }
+      },
+      "RestoreTestList": {
+        "type": "object",
+        "required": [
+          "restoreTests"
+        ],
+        "properties": {
+          "restoreTests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RestoreTest"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Pass the previous page's nextCursor to get the next page."
+          }
+        }
+      },
+      "Settings": {
+        "type": "object",
+        "required": [
+          "autoCreate",
+          "restoreStaleDays",
+          "failingRuns"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "autoCreate": {
+            "type": "boolean",
+            "description": "A report for a job nobody defined creates it, with a cadence of 24 hours and an RPO of 48."
+          },
+          "restoreStaleDays": {
+            "type": "integer"
+          },
+          "failingRuns": {
+            "type": "integer"
+          }
+        }
+      },
+      "UpdateSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "autoCreate": {
+            "type": "boolean"
+          },
+          "restoreStaleDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "failingRuns": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        }
+      },
+      "Summary": {
+        "type": "object",
+        "required": [
+          "jobs",
+          "states",
+          "autoCreate",
+          "lastRunAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "jobs": {
+            "type": "integer"
+          },
+          "states": {
+            "type": "object",
+            "required": [
+              "failing",
+              "at-risk",
+              "late",
+              "untested",
+              "unknown",
+              "healthy"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "failing": {
+                "type": "integer"
+              },
+              "at-risk": {
+                "type": "integer"
+              },
+              "late": {
+                "type": "integer"
+              },
+              "untested": {
+                "type": "integer"
+              },
+              "unknown": {
+                "type": "integer"
+              },
+              "healthy": {
+                "type": "integer"
+              }
+            }
+          },
+          "autoCreate": {
+            "type": "boolean"
+          },
+          "lastRunAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "format": "date-time"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

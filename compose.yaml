@@ -1,0 +1,35 @@
+# Backups. Jobs report their runs and restore tests; Backups tracks them and makes no backups (ADR 0048).
+#
+#   openssl rand -hex 32 > openasy-kek   # this key: sign-in secrets (ADR 0021). Keep it with your backups
+#   docker compose up -d
+#   docker compose logs backups | grep 'no owner yet'   # the one-time link that creates the owner account
+services:
+  backups:
+    image: ghcr.io/openasy/backups:0.1.0
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    ports:
+      - "127.0.0.1:8080:8080"   # UI and API; put a TLS proxy in front to reach it from elsewhere
+    volumes:
+      - backups-data:/data   # SQLite database: jobs, runs and restore tests
+    secrets:
+      - openasy-kek   # mounted at /run/secrets/openasy-kek
+    environment:
+      # The address people open Backups at; with a TLS proxy in front, its https:// URL.
+      BACKUPS_PUBLIC_URL: ${BACKUPS_PUBLIC_URL:-http://localhost:8080}
+      # For the jobs: it can report runs and restore tests and nothing else. Or use an API token with the editor role from Settings.
+      BACKUPS_INGEST_TOKEN: ${BACKUPS_INGEST_TOKEN:-}
+      # Sign in with your identity provider (OIDC), see the README:
+      # BACKUPS_OIDC_ISSUER: https://login.example.com
+      # BACKUPS_OIDC_CLIENT_ID: backups
+      # BACKUPS_OIDC_CLIENT_SECRET: ${BACKUPS_OIDC_CLIENT_SECRET}
+
+volumes:
+  backups-data:
+
+secrets:
+  openasy-kek:
+    file: ./openasy-kek
