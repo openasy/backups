@@ -14,9 +14,31 @@ const restoreTest = (name: string, extra: Record<string, unknown> = {}) =>
 
 describe("jobs", () => {
   it("are defined by an admin, with how often they run and how much may be lost", async () => {
-    const res = await app.post("/api/v1/jobs", { name: "db-nightly", tool: "restic", source: "postgres on db-1", location: "s3:backups/db", cadenceHours: 24, rpoHours: 48, retention: "7 daily, 4 weekly", owner: "platform", tags: ["prod", "db"] });
+    const res = await app.post("/api/v1/jobs", {
+      name: "db-nightly",
+      tool: "restic",
+      source: "postgres on db-1",
+      location: "s3:backups/db",
+      cadenceHours: 24,
+      rpoHours: 48,
+      retention: "7 daily, 4 weekly",
+      owner: "platform",
+      tags: ["prod", "db"],
+    });
     expect(res.status).toBe(201);
-    expect(await json(res)).toMatchObject({ name: "db-nightly", tool: "restic", cadenceHours: 24, rpoHours: 48, tags: ["prod", "db"], state: "unknown", reason: "No run has been reported yet.", lastRun: null, lastSuccessAt: null, lastRestoreTest: null, successRate30d: null });
+    expect(await json(res)).toMatchObject({
+      name: "db-nightly",
+      tool: "restic",
+      cadenceHours: 24,
+      rpoHours: 48,
+      tags: ["prod", "db"],
+      state: "unknown",
+      reason: "No run has been reported yet.",
+      lastRun: null,
+      lastSuccessAt: null,
+      lastRestoreTest: null,
+      successRate30d: null,
+    });
   });
 
   it("refuses what makes no sense", async () => {
@@ -64,7 +86,13 @@ describe("reports", () => {
     expect((await json(await app.admin(`/api/v1/jobs/${(await job("db-nightly")).id}/runs`))).runs).toHaveLength(1);
 
     expect((await restoreTest("db-nightly")).status).toBe(201);
-    expect(await job("db-nightly")).toMatchObject({ state: "healthy", lastRun: { status: "success" }, sizeBytes: 5_000_000, successRate30d: 1, lastRestoreTest: { ok: true, verifiedBy: "automated", ageDays: 0 } });
+    expect(await job("db-nightly")).toMatchObject({
+      state: "healthy",
+      lastRun: { status: "success" },
+      sizeBytes: 5_000_000,
+      successRate30d: 1,
+      lastRestoreTest: { ok: true, verifiedBy: "automated", ageDays: 0 },
+    });
   });
 
   it("move through late, at risk and back as time passes and backups come", async () => {
@@ -105,9 +133,16 @@ describe("reports", () => {
 
   it("read the output of restic and Velero as they come", async () => {
     app.clock.now += 0;
-    const restic = ["{\"message_type\":\"status\",\"percent_done\":1}", JSON.stringify({ message_type: "summary", files_new: 2, files_changed: 1, total_bytes_processed: 9000, total_duration: 12, snapshot_id: "rs1" })].join("\n");
+    const restic = [
+      '{"message_type":"status","percent_done":1}',
+      JSON.stringify({ message_type: "summary", files_new: 2, files_changed: 1, total_bytes_processed: 9000, total_duration: 12, snapshot_id: "rs1" }),
+    ].join("\n");
     expect((await app.report({ job: "db-nightly" }, restic)).status).toBe(201);
-    const velero = JSON.stringify({ kind: "Backup", metadata: { name: "nightly-1", labels: { "velero.io/schedule-name": "cluster" } }, status: { phase: "PartiallyFailed", errors: 3, startTimestamp: ago(40 * 60_000, app.clock.now), completionTimestamp: ago(30 * 60_000, app.clock.now) } });
+    const velero = JSON.stringify({
+      kind: "Backup",
+      metadata: { name: "nightly-1", labels: { "velero.io/schedule-name": "cluster" } },
+      status: { phase: "PartiallyFailed", errors: 3, startTimestamp: ago(40 * 60_000, app.clock.now), completionTimestamp: ago(30 * 60_000, app.clock.now) },
+    });
     expect((await app.report({}, velero)).status).toBe(422);
     expect((await app.report({ job: "db-nightly" }, velero)).status).toBe(201);
     const id = (await job("db-nightly")).id;
@@ -127,7 +162,10 @@ describe("auto-create", () => {
   it("makes a job from a report when an admin allows it, with cadence and RPO of a day and two", async () => {
     expect(await json(await app.admin("/api/v1/settings"))).toMatchObject({ autoCreate: false });
     expect(await json(await app.admin("/api/v1/settings", { method: "PUT", body: JSON.stringify({ autoCreate: true }) }))).toMatchObject({ autoCreate: true });
-    const res = await app.report({}, JSON.stringify({ job: "cluster", tool: "velero", startedAt: ago(2 * HOUR, app.clock.now), endedAt: ago(HOUR, app.clock.now), status: "success" }));
+    const res = await app.report(
+      {},
+      JSON.stringify({ job: "cluster", tool: "velero", startedAt: ago(2 * HOUR, app.clock.now), endedAt: ago(HOUR, app.clock.now), status: "success" }),
+    );
     expect(res.status).toBe(201);
     expect(await job("cluster")).toMatchObject({ tool: "velero", cadenceHours: 24, rpoHours: 48, state: "untested" });
     await app.admin("/api/v1/settings", { method: "PUT", body: JSON.stringify({ autoCreate: false }) });
@@ -157,7 +195,7 @@ describe("restore tests", () => {
     expect(ok).toMatchObject({ ok: true, verifiedBy: "manual", reportedBy: "admin token", durationSeconds: 340, snapshotId: "c1" });
     expect((await job("cluster")).state).toBe("healthy");
     await restoreTest("cluster", { ok: false, notes: "restore failed with password=hunter2" });
-    expect((await job("cluster"))).toMatchObject({ state: "untested", reason: "The last restore test failed.", lastRestoreTest: { ok: false } });
+    expect(await job("cluster")).toMatchObject({ state: "untested", reason: "The last restore test failed.", lastRestoreTest: { ok: false } });
     const tests = (await json(await app.admin(`/api/v1/jobs/${(await job("cluster")).id}/restore-tests`))).restoreTests;
     expect(tests).toHaveLength(2);
     expect(JSON.stringify(tests)).not.toContain("hunter2");
@@ -182,7 +220,9 @@ describe("overview", () => {
     expect(summary.jobs).toBe(2);
     expect(Object.values(summary.states as Record<string, number>).reduce((a, b) => a + b, 0)).toBe(2);
     const untested = (await json(await app.admin("/api/v1/jobs?state=untested"))).jobs;
-    expect(untested.map((j: { name: string }) => j.name).sort()).toEqual(["cluster", "db-nightly"].filter((n) => untested.some((j: { name: string }) => j.name === n)));
+    expect(untested.map((j: { name: string }) => j.name).sort()).toEqual(
+      ["cluster", "db-nightly"].filter((n) => untested.some((j: { name: string }) => j.name === n)),
+    );
     expect((await app.admin("/api/v1/jobs?state=great")).status).toBe(422);
     expect((await app.admin("/api/v1/jobs?limit=1")).status).toBe(200);
   });
@@ -207,7 +247,10 @@ describe("access", () => {
     expect((await app.ingest("/api/v1/jobs")).status).toBe(401);
     expect((await app.ingest("/api/v1/jobs", { method: "POST", body: "{}" })).status).toBe(401);
     expect((await app.ingest("/api/v1/settings")).status).toBe(401);
-    const res = await app.ingest("/api/v1/restore-tests", { method: "POST", body: JSON.stringify({ job: "cluster", testedAt: ago(HOUR, app.clock.now), ok: true, verifiedBy: "automated" }) });
+    const res = await app.ingest("/api/v1/restore-tests", {
+      method: "POST",
+      body: JSON.stringify({ job: "cluster", testedAt: ago(HOUR, app.clock.now), ok: true, verifiedBy: "automated" }),
+    });
     expect(res.status).toBe(201);
     expect(await json(res)).toMatchObject({ reportedBy: "ingest token" });
     const closed = await startApp({ version: "0.1.0", ingestToken: undefined, adminToken: undefined });

@@ -36,7 +36,10 @@ export interface AppOptions {
 }
 
 function metricsText(backups: Backups, version: string) {
-  return renderMetrics(version, backups.allJobs().map((j) => ({ job: j.name, state: j.state, lastSuccessAt: j.lastSuccessAt, sizeBytes: j.sizeBytes })));
+  return renderMetrics(
+    version,
+    backups.allJobs().map((j) => ({ job: j.name, state: j.state, lastSuccessAt: j.lastSuccessAt, sizeBytes: j.sizeBytes })),
+  );
 }
 
 /** Serves only /metrics, for a port that is not exposed with the rest (BACKUPS_METRICS_PORT). */
@@ -73,7 +76,8 @@ function send(res: ServerResponse, status: number, body: string | Buffer, type =
   res.end(body);
 }
 
-const json = (res: ServerResponse, status: number, data: unknown, headers?: Record<string, string>) => send(res, status, JSON.stringify(data), "application/json", headers);
+const json = (res: ServerResponse, status: number, data: unknown, headers?: Record<string, string>) =>
+  send(res, status, JSON.stringify(data), "application/json", headers);
 
 const TITLES: Record<ProblemCode, string> = {
   "invalid-token": "Invalid token",
@@ -128,7 +132,8 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
 
 async function readJson(req: IncomingMessage, limit = 64 * 1024): Promise<Record<string, unknown>> {
   const raw = await readBody(req, limit).catch((err: unknown) => {
-    if (err instanceof BackupsError && err.code === "payload-too-large") throw new BackupsError(400, "invalid-json", `The body must be JSON, at most ${Math.round(limit / 1024)} KiB.`);
+    if (err instanceof BackupsError && err.code === "payload-too-large")
+      throw new BackupsError(400, "invalid-json", `The body must be JSON, at most ${Math.round(limit / 1024)} KiB.`);
     throw err;
   });
   try {
@@ -173,7 +178,20 @@ function jobState(url: URL): JobState | undefined {
   return state as JobState;
 }
 
-export function createApp({ db, backups, version, auth, adminToken, ingestToken, webDir, docsDir, openapi, serveMetrics = true, products = [], hostsFile }: AppOptions) {
+export function createApp({
+  db,
+  backups,
+  version,
+  auth,
+  adminToken,
+  ingestToken,
+  webDir,
+  docsDir,
+  openapi,
+  serveMetrics = true,
+  products = [],
+  hostsFile,
+}: AppOptions) {
   // The served description includes /api/v1/auth from @openasy/auth, so the API reference documents sign-in too.
   const spec = openapi && JSON.stringify({ ...mergeOpenApi(openapi), info: { ...(openapi.info as object), version } });
   const noContent = (res: ServerResponse) => {
@@ -181,7 +199,8 @@ export function createApp({ db, backups, version, auth, adminToken, ingestToken,
   };
   const cursor = (url: URL) => url.searchParams.get("cursor") ?? undefined;
   const limit = (url: URL) => parseLimit(url.searchParams.get("limit"));
-  const page = <K extends string, T>(key: K, p: { items: T[]; nextCursor?: string }) => ({ [key]: p.items, ...(p.nextCursor && { nextCursor: p.nextCursor }) }) as Record<K, T[]> & { nextCursor?: string };
+  const page = <K extends string, T>(key: K, p: { items: T[]; nextCursor?: string }) =>
+    ({ [key]: p.items, ...(p.nextCursor && { nextCursor: p.nextCursor }) }) as Record<K, T[]> & { nextCursor?: string };
 
   /** The servers in the hosts file this product has nothing for, with where the file stands (ADR 0052). */
   const coverage = () => {
@@ -221,8 +240,18 @@ export function createApp({ db, backups, version, auth, adminToken, ingestToken,
     { method: "GET", path: "/api/v1/jobs/:id", auth: "viewer", handle: ({ params }) => backups.job(params[0]!) },
     { method: "PATCH", path: "/api/v1/jobs/:id", auth: "admin", handle: async ({ params, body }) => backups.updateJob(params[0]!, await body()) },
     { method: "DELETE", path: "/api/v1/jobs/:id", auth: "admin", handle: ({ res, params }) => (backups.deleteJob(params[0]!), noContent(res)) },
-    { method: "GET", path: "/api/v1/jobs/:id/runs", auth: "viewer", handle: ({ url, params }) => page("runs", backups.runs(params[0]!, cursor(url), limit(url))) },
-    { method: "GET", path: "/api/v1/jobs/:id/restore-tests", auth: "viewer", handle: ({ url, params }) => page("restoreTests", backups.restoreTests(params[0]!, cursor(url), limit(url))) },
+    {
+      method: "GET",
+      path: "/api/v1/jobs/:id/runs",
+      auth: "viewer",
+      handle: ({ url, params }) => page("runs", backups.runs(params[0]!, cursor(url), limit(url))),
+    },
+    {
+      method: "GET",
+      path: "/api/v1/jobs/:id/restore-tests",
+      auth: "viewer",
+      handle: ({ url, params }) => page("restoreTests", backups.restoreTests(params[0]!, cursor(url), limit(url))),
+    },
   ];
 
   const compiled = routes.map((r) => ({ ...r, re: new RegExp(`^${r.path.replace(/:[A-Za-z]+/g, "([^/]+)")}$`) }));
@@ -234,8 +263,10 @@ export function createApp({ db, backups, version, auth, adminToken, ingestToken,
     if (tokenMatches(req.headers.authorization, adminToken)) return "admin token";
     if (access === "ingest") {
       // An API token or a session with the editor role can send reports too, for scripts set up from Settings.
-      if (!ingestToken && !req.headers.authorization?.startsWith("Bearer oa_")) throw new BackupsError(503, "not-configured", "Set BACKUPS_INGEST_TOKEN on backups, or send an API token with the editor role.");
-      if (!req.headers.authorization?.startsWith("Bearer oa_")) throw new BackupsError(401, "invalid-token", "Send BACKUPS_INGEST_TOKEN or an API token as a bearer token.");
+      if (!ingestToken && !req.headers.authorization?.startsWith("Bearer oa_"))
+        throw new BackupsError(503, "not-configured", "Set BACKUPS_INGEST_TOKEN on backups, or send an API token with the editor role.");
+      if (!req.headers.authorization?.startsWith("Bearer oa_"))
+        throw new BackupsError(401, "invalid-token", "Send BACKUPS_INGEST_TOKEN or an API token as a bearer token.");
     }
     const p = auth.authorize(req, access === "ingest" ? "editor" : access);
     return p.kind === "session" ? p.user.name : `API token ${p.name}`;

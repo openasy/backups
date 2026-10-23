@@ -48,7 +48,10 @@ export function mask(value: string): string {
 
 /** The last JSON object of a body that may be the many lines `restic backup --json` prints. */
 function lastObject(raw: string): Obj {
-  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   const parse = (text: string): unknown => {
     try {
       return JSON.parse(text);
@@ -95,7 +98,10 @@ export function parseRun(raw: string, query: { job?: string | null; tool?: strin
       sizeBytes: null,
       filesNew: null,
       filesChanged: null,
-      error: phase === "Completed" && !warnings ? null : mask(`${phase}: ${errors} errors, ${warnings} warnings${st.failureReason ? `: ${String(st.failureReason).slice(0, 500)}` : ""}`),
+      error:
+        phase === "Completed" && !warnings
+          ? null
+          : mask(`${phase}: ${errors} errors, ${warnings} warnings${st.failureReason ? `: ${String(st.failureReason).slice(0, 500)}` : ""}`),
     };
   }
 

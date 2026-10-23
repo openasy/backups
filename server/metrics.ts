@@ -32,7 +32,9 @@ export function renderMetrics(version: string, jobs: JobGauge[]): string {
     ...jobs.flatMap((j) => STATES.map((s) => `openasy_backups_job_state{job="${label(j.job)}",state="${s}"} ${j.state === s ? 1 : 0}`)),
     "# HELP openasy_backups_last_success_timestamp_seconds When the job last made a backup; 0 when it never has.",
     "# TYPE openasy_backups_last_success_timestamp_seconds gauge",
-    ...jobs.map((j) => `openasy_backups_last_success_timestamp_seconds{job="${label(j.job)}"} ${j.lastSuccessAt ? Math.floor(Date.parse(j.lastSuccessAt) / 1000) : 0}`),
+    ...jobs.map(
+      (j) => `openasy_backups_last_success_timestamp_seconds{job="${label(j.job)}"} ${j.lastSuccessAt ? Math.floor(Date.parse(j.lastSuccessAt) / 1000) : 0}`,
+    ),
     "# HELP openasy_backups_last_size_bytes Size of the last backup that reported one.",
     "# TYPE openasy_backups_last_size_bytes gauge",
     ...jobs.filter((j) => j.sizeBytes !== null).map((j) => `openasy_backups_last_size_bytes{job="${label(j.job)}"} ${j.sizeBytes}`),

@@ -45,7 +45,9 @@ async function call(method: string, path: string, init: RequestInit = {}, concre
   // A response is either inline or a $ref to components/responses; build the JSON pointer to its schema either way.
   const shared = declared!.$ref?.split("/").pop();
   const response = shared ? spec.components.responses[shared]! : declared!;
-  const at = shared ? `openapi#/components/responses/${shared}` : `openapi#/paths/${path.replaceAll("/", "~1")}/${method.toLowerCase()}/responses/${res.status}`;
+  const at = shared
+    ? `openapi#/components/responses/${shared}`
+    : `openapi#/paths/${path.replaceAll("/", "~1")}/${method.toLowerCase()}/responses/${res.status}`;
 
   if (!response.content) {
     expect(res.headers.get("content-length") ?? "0", `${method} ${path} ${res.status} should have no body`).toBe("0");
@@ -61,7 +63,10 @@ async function call(method: string, path: string, init: RequestInit = {}, concre
   return { res, body };
 }
 
-const auth = (token: string, body?: string, type = "application/json") => ({ headers: { authorization: `Bearer ${token}`, "content-type": type }, ...(body !== undefined && { body }) });
+const auth = (token: string, body?: string, type = "application/json") => ({
+  headers: { authorization: `Bearer ${token}`, "content-type": type },
+  ...(body !== undefined && { body }),
+});
 const admin = (body?: unknown) => auth(ADMIN_TOKEN, body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body));
 
 describe("openapi.json", () => {
@@ -88,7 +93,8 @@ describe("openapi.json", () => {
 describe("responses match openapi.json", () => {
   let id = "";
   const report = (b = run("db-nightly", 2 * HOUR, { snapshotId: "s1", sizeBytes: 1000 }), token = INGEST_TOKEN) => auth(token, b);
-  const test = (o: Record<string, unknown> = {}) => admin({ job: "db-nightly", testedAt: ago(HOUR), ok: true, durationSeconds: 60, verifiedBy: "automated", ...o });
+  const test = (o: Record<string, unknown> = {}) =>
+    admin({ job: "db-nightly", testedAt: ago(HOUR), ok: true, durationSeconds: 60, verifiedBy: "automated", ...o });
 
   it("product and health", async () => {
     await call("GET", "/api/v1/version");
@@ -100,7 +106,8 @@ describe("responses match openapi.json", () => {
   });
 
   it("jobs: define, change, list", async () => {
-    const created = (await call("POST", "/api/v1/jobs", admin({ name: "db-nightly", tool: "restic", cadenceHours: 24, rpoHours: 48, tags: ["prod"] }))).body as { id: string };
+    const created = (await call("POST", "/api/v1/jobs", admin({ name: "db-nightly", tool: "restic", cadenceHours: 24, rpoHours: 48, tags: ["prod"] })))
+      .body as { id: string };
     id = created.id;
     await call("POST", "/api/v1/jobs", admin({ name: "db-nightly", cadenceHours: 24, rpoHours: 48 }));
     await call("POST", "/api/v1/jobs", admin({ name: "x", cadenceHours: 24, rpoHours: 1 }));

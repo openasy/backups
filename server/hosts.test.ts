@@ -16,11 +16,20 @@ describe("servers in the hosts file", () => {
     const add = (kind: string, name: string) => {
       const id = randomUUID();
       const at = new Date().toISOString();
-      app.db.prepare("INSERT INTO jobs (id, name, tool, source, cadence_hours, rpo_hours, created_at) VALUES (?, ?, 'restic', ?, 24, 24, ?)").run(id, `job ${id}`, kind === "host" ? `${name}:/srv` : "", at);
+      app.db
+        .prepare("INSERT INTO jobs (id, name, tool, source, cadence_hours, rpo_hours, created_at) VALUES (?, ?, 'restic', ?, 24, 24, ?)")
+        .run(id, `job ${id}`, kind === "host" ? `${name}:/srv` : "", at);
     };
     try {
       const summary = async () => (await json(await app.admin("/api/v1/summary"))).hostsFile;
-      expect(await summary()).toEqual({ ...state, missing: [{ name: "bastion", address: "10.0.0.2" }, { name: "web-1", address: "10.0.0.5" }, { name: "db-1", address: "10.0.0.6" }] });
+      expect(await summary()).toEqual({
+        ...state,
+        missing: [
+          { name: "bastion", address: "10.0.0.2" },
+          { name: "web-1", address: "10.0.0.5" },
+          { name: "db-1", address: "10.0.0.6" },
+        ],
+      });
       // By full name and by address; a job that names no server covers none.
       add("host", "web-1.example.com");
       add("host", "10.0.0.2");

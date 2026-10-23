@@ -12,7 +12,7 @@ export function bytes(n: number | null | undefined): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let v = n;
   let i = 0;
-  while (v >= 1024 && i < units.length - 1) (v /= 1024, i++);
+  while (v >= 1024 && i < units.length - 1) ((v /= 1024), i++);
   return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
 }
 

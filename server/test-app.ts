@@ -31,7 +31,10 @@ export async function startApp(opts: Partial<AppOptions> & { version: string }) 
   const base = `http://localhost:${(server.address() as AddressInfo).port}`;
   const auth = createAuth({ db, product: "backups", productName: "OpenAsy Backups", origin: base });
   handler = createApp({ db, backups, auth, ingestToken: INGEST_TOKEN, adminToken: ADMIN_TOKEN, ...opts });
-  const as = (token: string) => (path: string, init: RequestInit = {}) => fetch(base + path, { ...init, headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...init.headers } });
+  const as =
+    (token: string) =>
+    (path: string, init: RequestInit = {}) =>
+      fetch(base + path, { ...init, headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...init.headers } });
   const admin = as(ADMIN_TOKEN);
   const ingest = as(INGEST_TOKEN);
   const report = (query: Record<string, string>, body: string) => ingest(`/api/v1/runs?${new URLSearchParams(query)}`, { method: "POST", body });
