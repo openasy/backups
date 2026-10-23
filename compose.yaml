@@ -23,9 +23,9 @@ services:
       # For the jobs: it can report runs and restore tests and nothing else. Or use an API token with the editor role from Settings.
       BACKUPS_INGEST_TOKEN: ${BACKUPS_INGEST_TOKEN:-}
       # Sign in with your identity provider (OIDC), see the README:
-      # BACKUPS_OIDC_ISSUER: https://login.example.com
-      # BACKUPS_OIDC_CLIENT_ID: backups
-      # BACKUPS_OIDC_CLIENT_SECRET: ${BACKUPS_OIDC_CLIENT_SECRET}
+      # OPENASY_OIDC_ISSUER: https://login.example.com
+      # OPENASY_OIDC_CLIENT_ID: backups
+      # OPENASY_OIDC_CLIENT_SECRET: ${OPENASY_OIDC_CLIENT_SECRET}
 
 volumes:
   backups-data:

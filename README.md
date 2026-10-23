@@ -86,7 +86,7 @@ are on http://localhost:8080, the API reference at http://localhost:8080/api/doc
 | `BACKUPS_RETENTION_DAYS` | `365` | Runs and restore tests older than this are deleted |
 | `BACKUPS_METRICS_PORT` | | Serve `/metrics` on this port only (ADR 0026) |
 | `BACKUPS_HEADLESS` | `false` | `true` serves only the API |
-| `BACKUPS_PASSWORD_SIGN_IN`, `BACKUPS_OIDC_*` | | Sign-in, as in every OpenAsy product ([@openasy/auth](https://github.com/openasy/auth)) |
+| `BACKUPS_PASSWORD_SIGN_IN`, `OPENASY_OIDC_*` | | Sign-in, as in every OpenAsy product ([@openasy/auth](https://github.com/openasy/auth)) |
 
 `/metrics` has `openasy_backups_job_state{job,state}` and `openasy_backups_last_success_timestamp_seconds{job}` for each
 job, to alert on in your own Prometheus.
