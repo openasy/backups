@@ -3,6 +3,7 @@ import {
   Badge,
   BrandProvider,
   Button,
+  Callout,
   DataTable,
   Dialog,
   EmptyState,
@@ -27,7 +28,7 @@ import {
 import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth } from "@openasy/auth/react";
 import { DatabaseBackup, KeyRound, LogIn, LogOut, Plus, Settings2, SlidersHorizontal, Trash2, UserRound, Users } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { api, MfaSetupRequired, Unauthorized, type Job, type JobState, type ProductLink, type RestoreTest, type Run, type Settings, type Summary, type Tool } from "./api.ts";
+import { api, MfaSetupRequired, Unauthorized, type Job, type JobState, type ProductLink, type RestoreTest, type Run, type Settings, type HostsCoverage, type Summary, type Tool } from "./api.ts";
 import { ago, bytes, duration } from "./format.ts";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -135,6 +136,24 @@ function JobDialog({ open, onClose, call, job, onSaved }: { open: boolean; onClo
   );
 }
 
+/** Servers in the install's hosts file Backups has no backup job for, and the file's own problems (ADR 0052). */
+function HostsCoverageNote({ file }: { file?: HostsCoverage | null }) {
+  if (!file) return null;
+  if (file.error) {
+    return (
+      <Callout tone="danger" title="The hosts file is not applied">
+        {file.error} Its last good version is used until it is fixed ({file.path}).
+      </Callout>
+    );
+  }
+  if (!file.missing.length) return null;
+  return (
+    <Callout tone="warning" title={`${file.missing.length} ${file.missing.length === 1 ? "server" : "servers"} in the hosts file ${file.missing.length === 1 ? "has" : "have"} no backup job`}>
+      {file.missing.map((h) => h.name).join(", ")}. Define a job whose name or source names the server, such as db-1:/var/lib/postgresql.
+    </Callout>
+  );
+}
+
 function JobsPage({ call, summary, reload }: { call: Call; summary?: Summary; reload: () => void }) {
   const { can } = useAuth();
   const [rows, setRows] = useState<Job[]>();
@@ -185,6 +204,7 @@ function JobsPage({ call, summary, reload }: { call: Call; summary?: Summary; re
           )
         }
       />
+      <HostsCoverageNote file={s?.hostsFile} />
       {s && (
         <KpiGrid minWidth={140}>
           <KpiCard label="Failing" value={s.states.failing} tone={s.states.failing ? "danger" : "success"} />

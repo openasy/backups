@@ -5,6 +5,7 @@ import { extname, join, normalize } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { createGunzip } from "node:zlib";
 import { AuthError, mergeOpenApi, sendProblem, type Auth, type Role } from "@openasy/auth";
+import { missingHosts, type HostEntry, type HostsFileState } from "./hosts.ts";
 import { log } from "./log.ts";
 import { countRequest, renderMetrics } from "./metrics.ts";
 import type { ProductLink } from "./products.ts";
@@ -30,6 +31,8 @@ export interface AppOptions {
   serveMetrics?: boolean;
   /** The install's OpenAsy products and their addresses, from OPENASY_PRODUCTS, for the product switcher. */
   products?: ProductLink[];
+  /** The hosts file (OPENASY_HOSTS, ADR 0052) as last applied, and where it stands; absent when there is none. */
+  hostsFile?: () => { state: HostsFileState; hosts: HostEntry[] };
 }
 
 function metricsText(backups: Backups, version: string) {
@@ -170,7 +173,7 @@ function jobState(url: URL): JobState | undefined {
   return state as JobState;
 }
 
-export function createApp({ db, backups, version, auth, adminToken, ingestToken, webDir, docsDir, openapi, serveMetrics = true, products = [] }: AppOptions) {
+export function createApp({ db, backups, version, auth, adminToken, ingestToken, webDir, docsDir, openapi, serveMetrics = true, products = [], hostsFile }: AppOptions) {
   // The served description includes /api/v1/auth from @openasy/auth, so the API reference documents sign-in too.
   const spec = openapi && JSON.stringify({ ...mergeOpenApi(openapi), info: { ...(openapi.info as object), version } });
   const noContent = (res: ServerResponse) => {
@@ -180,10 +183,17 @@ export function createApp({ db, backups, version, auth, adminToken, ingestToken,
   const limit = (url: URL) => parseLimit(url.searchParams.get("limit"));
   const page = <K extends string, T>(key: K, p: { items: T[]; nextCursor?: string }) => ({ [key]: p.items, ...(p.nextCursor && { nextCursor: p.nextCursor }) }) as Record<K, T[]> & { nextCursor?: string };
 
+  /** The servers in the hosts file this product has nothing for, with where the file stands (ADR 0052). */
+  const coverage = () => {
+    if (!hostsFile) return null;
+    const { state, hosts } = hostsFile();
+    return { ...state, missing: missingHosts(hosts, backups.knownHosts()).map((h) => ({ name: h.name, address: h.address })) };
+  };
+
   const routes: Route[] = [
     { method: "GET", path: "/api/v1/version", auth: "none", handle: () => ({ product: "backups", version }) },
     { method: "GET", path: "/api/v1/products", auth: "viewer", handle: () => ({ products }) },
-    { method: "GET", path: "/api/v1/summary", auth: "viewer", handle: () => backups.summary() },
+    { method: "GET", path: "/api/v1/summary", auth: "viewer", handle: () => ({ ...backups.summary(), hostsFile: coverage() }) },
     { method: "GET", path: "/api/v1/settings", auth: "viewer", handle: () => backups.settings() },
     { method: "PUT", path: "/api/v1/settings", auth: "admin", handle: async ({ body }) => backups.updateSettings(await body()) },
 

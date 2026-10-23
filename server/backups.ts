@@ -353,6 +353,11 @@ export function createBackups(db: DatabaseSync, { retentionDays = 400, now = Dat
       return presentTest(db.prepare("SELECT * FROM restore_tests WHERE id = ?").get(id) as Record<string, any>);
     },
 
+    /** What this product knows servers by, to say which in the hosts file it has nothing for (ADR 0052): names in job names and sources. */
+    knownHosts(): string[] {
+      return (db.prepare("SELECT name, source FROM jobs").all() as Array<{ name: string; source: string }>).flatMap((r) => `${r.name} ${r.source}`.split(/[^A-Za-z0-9._-]+/));
+    },
+
     summary() {
       const s = settings();
       const jobs = (db.prepare("SELECT * FROM jobs").all() as Array<Record<string, any>>).map((j) => presentJob(j, s));

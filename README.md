@@ -80,6 +80,7 @@ are on http://localhost:8080, the API reference at http://localhost:8080/api/doc
 | `PORT` | `8080` | HTTP port |
 | `BACKUPS_PUBLIC_URL` | `http://localhost:8080` | The address people open, with `https://` behind your TLS proxy |
 | `OPENASY_PRODUCTS` | | The install's other OpenAsy products, for the product switcher. Give every product the same value |
+| `OPENASY_HOSTS` | | The install's hosts file, shared with Infrastructure and Logs (ADR 0052). The main page lists the servers in it with no backup job, matched by name or address in a job's name or source, such as db-1:/var/lib/postgresql |
 | `BACKUPS_INGEST_TOKEN` | | Lets jobs report runs and restore tests and nothing else. An API token with the editor role works too |
 | `BACKUPS_SECRETS_KEY_FILE` | `/run/secrets/openasy-kek` | 32-byte key-encryption key |
 | `BACKUPS_DB` | `/data/backups.db` | SQLite file (WAL), on the `/data` volume |
