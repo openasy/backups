@@ -98,3 +98,12 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
+
+/** What the overview draws besides the summary (GET /api/v1/overview). */
+export interface Overview {
+  /** Runs that ended on each of the last 30 days (UTC) by status, and the bytes they backed up; oldest first. */
+  days: Array<{ day: string; success: number; warning: number; failed: number; bytes: number }>;
+  /** Restore tests of the last 90 days, and jobs without one. */
+  restoreTests: { ok: number; failed: number; untestedJobs: number };
+  failures: Array<{ id: string; job: { id: string; name: string }; endedAt: string; error: string | null }>;
+}

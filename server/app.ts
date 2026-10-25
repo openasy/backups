@@ -216,6 +216,7 @@ export function createApp({
     { method: "GET", path: "/api/v1/version", auth: "none", handle: () => ({ product: "backups", version }) },
     { method: "GET", path: "/api/v1/products", auth: "viewer", handle: () => ({ products }) },
     { method: "GET", path: "/api/v1/summary", auth: "viewer", handle: () => ({ ...backups.summary(), hostsFile: coverage() }) },
+    { method: "GET", path: "/api/v1/overview", auth: "viewer", handle: () => backups.overview() },
     { method: "GET", path: "/api/v1/settings", auth: "viewer", handle: () => backups.settings() },
     { method: "PUT", path: "/api/v1/settings", auth: "admin", handle: async ({ body }) => backups.updateSettings(await body()) },
 

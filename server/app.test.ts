@@ -272,3 +272,27 @@ describe("access", () => {
     expect((await fetch(`${app.base}/readyz`)).status).toBe(200);
   });
 });
+
+describe("the overview", () => {
+  let own: Awaited<ReturnType<typeof startApp>>;
+  beforeAll(async () => {
+    own = await startApp({ version: "0.1.0" });
+  });
+  afterAll(() => own.close());
+
+  it("counts runs by day and status, restore tests, and lists failed runs", async () => {
+    for (const name of ["db", "files"]) await own.post("/api/v1/jobs", { name, tool: "restic", cadenceHours: 24, rpoHours: 48 });
+    await own.report({}, run("db", 2 * HOUR, { tool: "restic", sizeBytes: 1000 }));
+    await own.report({}, run("db", 26 * HOUR, { tool: "restic", status: "failed", error: "repository locked" }));
+    await own.report({}, run("files", 3 * HOUR, { tool: "restic", status: "warning", sizeBytes: 500 }));
+    await own.post("/api/v1/restore-tests", { job: "db", testedAt: ago(HOUR, own.clock.now), ok: true, durationSeconds: 60, verifiedBy: "manual" });
+    const o = await json(await own.admin("/api/v1/overview"));
+    expect(o.days).toHaveLength(30);
+    expect(o.days.at(-1)).toMatchObject({ day: "2026-10-22", success: 1, warning: 1, failed: 0, bytes: 1500 });
+    expect(o.days.at(-2)).toMatchObject({ failed: 1 });
+    expect(o.restoreTests).toEqual({ ok: 1, failed: 0, untestedJobs: 1 });
+    expect(o.failures).toEqual([
+      { id: expect.any(String), job: { id: expect.any(String), name: "db" }, endedAt: expect.any(String), error: "repository locked" },
+    ]);
+  });
+});

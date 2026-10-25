@@ -21,16 +21,39 @@ import {
   TextField,
   TimeSeriesChart,
   usePath,
-  type Column,
-  type ProductId,
   useThemePreference,
   useAgo,
   toLocale,
   useLocalePreference,
+  DonutChart,
+  formatBytes,
+  Gauge,
+  OverviewGrid,
+  StackedBarChart,
+  StatusStrip,
+  TONE_COLORS,
+  type Column,
+  type ProductId,
 } from "@openasy/ui";
 import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAccountMenu, useAuth, useInstallBrand } from "@openasy/auth/react";
 import colophon from "virtual:openasy-colophon";
-import { DatabaseBackup, KeyRound, LogIn, LogOut, Plus, SlidersHorizontal, Trash2, UserRound, Users } from "lucide-react";
+import {
+  CircleCheck,
+  CircleX,
+  Clock,
+  DatabaseBackup,
+  FlaskConical,
+  KeyRound,
+  LayoutDashboard,
+  LogIn,
+  LogOut,
+  Plus,
+  ShieldAlert,
+  SlidersHorizontal,
+  Trash2,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   api,
@@ -45,20 +68,22 @@ import {
   type HostsCoverage,
   type Summary,
   type Tool,
+  type Overview,
 } from "./api.ts";
 import { bytes, duration } from "./format.ts";
 import { useT, type T } from "./i18n.ts";
 import { search } from "./search.ts";
 
 const PAGES = ["settings", "setup", "account", "members", "signin", "tokens", "about"] as const;
-type Route = { page: "jobs" | (typeof PAGES)[number] } | { page: "job"; id: string };
+type Route = { page: "overview" | "jobs" | (typeof PAGES)[number] } | { page: "job"; id: string };
 /** The first path segments that are pages of this UI, for followLinks. */
-export const PATHS = ["jobs", ...PAGES];
+export const PATHS = ["overview", "jobs", ...PAGES];
 function parseRoute(path: string): Route {
   const [page, id] = path.replace(/^\//, "").split("/");
   if (page === "jobs" && id) return { page: "job", id: decodeURIComponent(id) };
   if ((PAGES as readonly string[]).includes(page ?? "")) return { page: page as (typeof PAGES)[number] };
-  return { page: "jobs" };
+  if (page === "jobs") return { page: "jobs" };
+  return { page: "overview" };
 }
 
 /** Data loading with the session; when it ends, the sign-in screen comes back. */
@@ -206,6 +231,160 @@ function HostsCoverageNote({ file }: { file?: HostsCoverage | null }) {
   );
 }
 
+function OverviewPage({ call, summary }: { call: Call; summary?: Summary }) {
+  const ago = useAgo();
+  const t = useT();
+  const [o, setO] = useState<Overview>();
+  useEffect(() => void call<Overview>("/api/v1/overview").then(setO, () => {}), [call, summary]);
+  const s = summary;
+  const day = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+  const runs = o ? o.days.reduce((n, d) => n + d.success + d.warning + d.failed, 0) : 0;
+  const worked = o ? o.days.reduce((n, d) => n + d.success + d.warning, 0) : 0;
+  const tests = o ? o.restoreTests.ok + o.restoreTests.failed : 0;
+  const failureColumns: Column<Overview["failures"][number]>[] = [
+    {
+      id: "job",
+      header: t("overviewPage.job"),
+      width: "28%",
+      cell: (r) => (
+        <a href={`/jobs/${r.job.id}`} className="font-medium">
+          {r.job.name}
+        </a>
+      ),
+    },
+    { id: "when", header: t("overviewPage.ended"), width: "120px", cell: (r) => <span className="text-xs">{ago(r.endedAt)}</span> },
+    { id: "error", header: t("overviewPage.error"), cell: (r) => <span className="text-xs text-fg-muted">{r.error ?? ""}</span> },
+  ];
+  const STATE_COLOR: Record<JobState, string> = {
+    failing: TONE_COLORS.danger,
+    "at-risk": TONE_COLORS.critical,
+    late: TONE_COLORS.warning,
+    untested: TONE_COLORS.info,
+    unknown: TONE_COLORS.neutral,
+    healthy: TONE_COLORS.success,
+  };
+  return (
+    <>
+      <PageHeader
+        title={t("overviewPage.overview")}
+        description={s ? t("jobsPage.lastRun", { plural: t("plurals.job", { count: s.jobs }), ago: ago(s.lastRunAt) }) : undefined}
+      />
+      <HostsCoverageNote file={s?.hostsFile} />
+      {s && (
+        <KpiGrid minWidth={140}>
+          <KpiCard label={t("jobsPage.failing")} value={s.states.failing} icon={CircleX} tone={s.states.failing ? "danger" : "success"} href="/jobs" />
+          <KpiCard label={t("jobsPage.atRisk")} value={s.states["at-risk"]} icon={ShieldAlert} tone={s.states["at-risk"] ? "danger" : "success"} href="/jobs" />
+          <KpiCard label={t("jobsPage.late")} value={s.states.late} icon={Clock} tone={s.states.late ? "warning" : "success"} href="/jobs" />
+          <KpiCard label={t("jobsPage.untested")} value={s.states.untested} icon={FlaskConical} tone={s.states.untested ? "info" : "success"} href="/jobs" />
+          <KpiCard
+            label={t("jobsPage.healthy")}
+            value={s.states.healthy}
+            icon={CircleCheck}
+            tone="success"
+            trend={o?.days.map((d) => d.success)}
+            trendColor={TONE_COLORS.success}
+          />
+        </KpiGrid>
+      )}
+      {o && (
+        <Panel title={t("overviewPage.last30Days")} description={t("overviewPage.last30DaysDetail")}>
+          <StatusStrip
+            label={t("overviewPage.last30Days")}
+            height={36}
+            start={t("overviewPage.daysAgo", { n: 30 })}
+            end={t("overviewPage.today")}
+            cells={o.days.map((d) => ({
+              id: d.day,
+              label: day(d.day),
+              tone: d.failed ? "danger" : d.warning ? "warning" : d.success ? "success" : "neutral",
+              detail: t("overviewPage.dayDetail", { success: d.success, warning: d.warning, failed: d.failed }),
+            }))}
+          />
+        </Panel>
+      )}
+      {o && (
+        <OverviewGrid>
+          <Panel title={t("overviewPage.runs")} description={t("overviewPage.runsDetail")}>
+            <StackedBarChart
+              label={t("overviewPage.runs")}
+              categories={o.days.map((d) => day(d.day))}
+              segments={[
+                { id: "success", name: t("overviewPage.success"), color: TONE_COLORS.success },
+                { id: "warning", name: t("overviewPage.warning"), color: TONE_COLORS.warning },
+                { id: "failed", name: t("overviewPage.failed"), color: TONE_COLORS.danger },
+              ]}
+              values={o.days.map((d) => [d.success, d.warning, d.failed])}
+              height={190}
+              xTicks={6}
+            />
+          </Panel>
+          <Panel title={t("overviewPage.worked")} description={t("overviewPage.workedDetail")}>
+            {runs ? (
+              <Gauge
+                label={t("overviewPage.worked")}
+                value={worked}
+                max={runs}
+                tone={worked === runs ? "success" : worked / runs >= 0.95 ? "warning" : "danger"}
+                caption={t("overviewPage.ofRuns", { worked, runs })}
+              />
+            ) : (
+              <EmptyState title={t("overviewPage.noRuns")} />
+            )}
+          </Panel>
+        </OverviewGrid>
+      )}
+      {o && s && (
+        <OverviewGrid>
+          <Panel title={t("overviewPage.backedUp")} description={t("overviewPage.backedUpDetail")}>
+            <TimeSeriesChart
+              label={t("overviewPage.backedUp")}
+              labels={o.days.map((d) => day(d.day))}
+              series={[{ id: "bytes", name: t("overviewPage.backedUp"), data: o.days.map((d) => d.bytes), color: TONE_COLORS.info }]}
+              format={(v) => formatBytes(v)}
+              height={180}
+              xTicks={6}
+            />
+          </Panel>
+          <Panel title={t("overviewPage.byState")} description={t("overviewPage.byStateDetail")}>
+            <DonutChart
+              label={t("overviewPage.byState")}
+              caption={t("overviewPage.jobs")}
+              slices={STATE_ORDER.map((k) => ({ id: k, name: STATE_LABEL(t)[k], value: s.states[k], color: STATE_COLOR[k], href: "/jobs" }))}
+            />
+          </Panel>
+        </OverviewGrid>
+      )}
+      {o && (
+        <OverviewGrid>
+          <Panel title={t("overviewPage.latestFailures")} description={t("overviewPage.latestFailuresDetail")} flush>
+            {o.failures.length ? (
+              <DataTable label={t("overviewPage.latestFailures")} rows={o.failures} columns={failureColumns} getRowId={(r) => r.id} />
+            ) : (
+              <EmptyState title={t("overviewPage.noFailures")} />
+            )}
+          </Panel>
+          <Panel title={t("overviewPage.restoreTests")} description={t("overviewPage.restoreTestsDetail")}>
+            {tests ? (
+              <Gauge
+                label={t("overviewPage.restoreTests")}
+                value={o.restoreTests.ok}
+                max={tests}
+                tone={o.restoreTests.failed ? "danger" : "success"}
+                caption={t("overviewPage.testsWorked", { ok: o.restoreTests.ok, total: tests })}
+              />
+            ) : (
+              <EmptyState title={t("overviewPage.noTests")} />
+            )}
+            {o.restoreTests.untestedJobs > 0 && (
+              <p className="m-0 mt-2 text-center text-xs text-warning-text">{t("overviewPage.untestedJobs", { count: o.restoreTests.untestedJobs })}</p>
+            )}
+          </Panel>
+        </OverviewGrid>
+      )}
+    </>
+  );
+}
+
 function JobsPage({ call, summary, reload }: { call: Call; summary?: Summary; reload: () => void }) {
   const ago = useAgo();
   const t = useT();
@@ -280,15 +459,6 @@ function JobsPage({ call, summary, reload }: { call: Call; summary?: Summary; re
         }
       />
       <HostsCoverageNote file={s?.hostsFile} />
-      {s && (
-        <KpiGrid minWidth={140}>
-          <KpiCard label={t("jobsPage.failing")} value={s.states.failing} tone={s.states.failing ? "danger" : "success"} />
-          <KpiCard label={t("jobsPage.atRisk")} value={s.states["at-risk"]} tone={s.states["at-risk"] ? "danger" : "success"} />
-          <KpiCard label={t("jobsPage.late")} value={s.states.late} tone={s.states.late ? "warning" : "success"} />
-          <KpiCard label={t("jobsPage.untested")} value={s.states.untested} tone={s.states.untested ? "info" : "success"} />
-          <KpiCard label={t("jobsPage.healthy")} value={s.states.healthy} tone="success" />
-        </KpiGrid>
-      )}
       <FilterBar onClear={() => setStates([])}>
         <FacetFilter
           label={t("jobsPage.state")}
@@ -848,7 +1018,10 @@ function Product() {
     return () => clearInterval(t);
   }, [reload]);
 
-  const nav = [{ id: "jobs", label: msg("product.jobs"), icon: DatabaseBackup, count: summary?.jobs }];
+  const nav = [
+    { id: "overview", label: msg("product.overview"), icon: LayoutDashboard },
+    { id: "jobs", label: msg("product.jobs"), icon: DatabaseBackup, count: summary?.jobs },
+  ];
   const footerNav = [
     { id: "settings", label: msg("product.settings"), icon: SlidersHorizontal },
     ...(can("admin")
@@ -883,8 +1056,10 @@ function Product() {
       onThemeChange={setTheme}
       onLanguageChange={(code) => setLocale(toLocale(code))}
     >
-      {route.page === "jobs" && summary && summary.jobs === 0 && !summary.autoCreate ? (
+      {(route.page === "overview" || route.page === "jobs") && summary && summary.jobs === 0 && !summary.autoCreate ? (
         <WelcomePage />
+      ) : route.page === "overview" ? (
+        <OverviewPage call={call} summary={summary} />
       ) : route.page === "jobs" ? (
         <JobsPage call={call} summary={summary} reload={reload} />
       ) : route.page === "job" ? (

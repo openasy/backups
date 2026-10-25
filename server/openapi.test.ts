@@ -162,6 +162,7 @@ describe("responses match openapi.json", () => {
     await call("PUT", "/api/v1/settings", { method: "PUT" });
     await call("POST", "/api/v1/runs", report(run("created-by-report", HOUR, { tool: "velero" })));
     await call("GET", "/api/v1/summary", admin());
+    await call("GET", "/api/v1/overview", admin());
     await call("GET", "/api/v1/summary", {});
   });
 

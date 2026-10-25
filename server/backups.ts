@@ -438,6 +438,51 @@ export function createBackups(db: DatabaseSync, { retentionDays = 400, now = Dat
       return { jobs: jobs.length, states, autoCreate: s.autoCreate, lastRunAt };
     },
 
+    /**
+     * What the overview draws besides the summary: runs on each of the last 30 days by how they went, the data each
+     * day's runs backed up, restore tests of the last 90 days, jobs without one, and the latest failed runs.
+     */
+    overview() {
+      const today = Math.floor(now() / DAY) * DAY;
+      const days = Array.from({ length: 30 }, (_, i) => ({ day: iso(today - (29 - i) * DAY).slice(0, 10), success: 0, warning: 0, failed: 0, bytes: 0 }));
+      const at = new Map(days.map((d) => [d.day, d]));
+      for (const r of db
+        .prepare(
+          "SELECT substr(ended_at, 1, 10) AS d, status, COUNT(*) AS n, COALESCE(SUM(size_bytes), 0) AS b FROM runs WHERE ended_at >= ? GROUP BY d, status",
+        )
+        .all(days[0]!.day) as Array<{ d: string; status: RunStatus; n: number; b: number }>) {
+        const d = at.get(r.d);
+        if (d) ((d[r.status] = r.n), (d.bytes += r.b));
+      }
+      const since = iso(now() - 90 * DAY);
+      const tests = db
+        .prepare("SELECT COALESCE(SUM(ok = 1), 0) AS ok, COALESCE(SUM(ok = 0), 0) AS failed FROM restore_tests WHERE tested_at > ?")
+        .get(since) as {
+        ok: number;
+        failed: number;
+      };
+      const untested = (
+        db
+          .prepare("SELECT COUNT(*) AS n FROM jobs j WHERE NOT EXISTS (SELECT 1 FROM restore_tests t WHERE t.job_id = j.id AND t.tested_at > ?)")
+          .get(since) as {
+          n: number;
+        }
+      ).n;
+      const failures = (
+        db
+          .prepare(
+            "SELECT r.id, r.job_id, j.name, r.ended_at, r.error FROM runs r JOIN jobs j ON j.id = r.job_id WHERE r.status = 'failed' ORDER BY r.ended_at DESC LIMIT 8",
+          )
+          .all() as Array<Record<string, any>>
+      ).map((r) => ({
+        id: r.id as string,
+        job: { id: r.job_id as string, name: r.name as string },
+        endedAt: r.ended_at as string,
+        error: (r.error as string | null) ?? null,
+      }));
+      return { days, restoreTests: { ...tests, untestedJobs: untested }, failures };
+    },
+
     /** Every job with its state and last success, for /metrics. */
     allJobs() {
       const s = settings();

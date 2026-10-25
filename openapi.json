@@ -816,6 +816,49 @@
         "x-openasy-role": "viewer"
       }
     },
+    "/api/v1/overview": {
+      "get": {
+        "operationId": "getOverview",
+        "tags": [
+          "Product"
+        ],
+        "summary": "What the overview draws",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Runs that ended on each of the last 30 days by status with the bytes they backed up, restore tests of the last 90 days and the jobs without one, and the eight latest failed runs.\n\nNeeds the viewer role.",
+        "responses": {
+          "200": {
+            "description": "What the overview draws.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
     "/api/v1/version": {
       "get": {
         "operationId": "getVersion",
@@ -1825,6 +1868,116 @@
                 },
                 "address": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Overview": {
+        "type": "object",
+        "required": [
+          "days",
+          "restoreTests",
+          "failures"
+        ],
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "day",
+                "success",
+                "warning",
+                "failed",
+                "bytes"
+              ],
+              "properties": {
+                "day": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "success": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "warning": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "failed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "description": "Oldest first; the last is today (UTC)."
+          },
+          "restoreTests": {
+            "type": "object",
+            "required": [
+              "ok",
+              "failed",
+              "untestedJobs"
+            ],
+            "properties": {
+              "ok": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "untestedJobs": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "job",
+                "endedAt",
+                "error"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "job": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "endedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               }
             }
