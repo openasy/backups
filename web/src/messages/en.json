@@ -22,7 +22,9 @@
   "hostsCoverageNote": {
     "itsLastGoodVersionIs": "{{error}}Its last good version is used until it is fixed ({{path}}).",
     "theHostsFileIsNot": "The hosts file is not applied",
-    "inTheHostsFileNo": "{{length}} {{value}} in the hosts file {{value2}} no backup job"
+    "inTheHostsFileNo_one": "{{count}} server in the hosts file has no backup job",
+    "inTheHostsFileNo_other": "{{count}} servers in the hosts file have no backup job",
+    "whatToDo": "Define a job whose name or source names the server, such as db-1:/var/lib/postgresql."
   },
   "jobsPage": {
     "state": "State",
@@ -99,7 +101,10 @@
     "delete": "Delete {{name}}?",
     "itsRunsAndRestoreTests": "Its runs and restore tests are deleted. A later report creates it again only if reports may create jobs.",
     "cancel": "Cancel",
-    "delete2": "Delete"
+    "delete2": "Delete",
+    "noSourceDescribed": "No source described",
+    "daysAgo": "{{days}} d ago",
+    "never": "Never"
   },
   "backupSettingsPage": {
     "settings": "Settings",
@@ -157,5 +162,8 @@
   "plurals": {
     "job_one": "{{count}} job",
     "job_other": "{{count}} jobs"
+  },
+  "search": {
+    "job": "Job"
   }
 }

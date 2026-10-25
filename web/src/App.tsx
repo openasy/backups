@@ -25,11 +25,13 @@ import {
   type ProductId,
   useThemePreference,
   useAgo,
+  toLocale,
+  useLocalePreference,
 } from "@openasy/ui";
-import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAuth, useInstallBrand } from "@openasy/auth/react";
+import { AccountSettings, AuthGate, MembersSettings, SignInSettings, TokensSettings, useAccountMenu, useAuth, useInstallBrand } from "@openasy/auth/react";
 import colophon from "virtual:openasy-colophon";
-import { DatabaseBackup, KeyRound, LogIn, LogOut, Plus, Settings2, SlidersHorizontal, Trash2, UserRound, Users } from "lucide-react";
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { DatabaseBackup, KeyRound, LogIn, LogOut, Plus, SlidersHorizontal, Trash2, UserRound, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   api,
   MfaSetupRequired,
@@ -46,6 +48,7 @@ import {
 } from "./api.ts";
 import { bytes, duration } from "./format.ts";
 import { useT, type T } from "./i18n.ts";
+import { search } from "./search.ts";
 
 const PAGES = ["settings", "setup", "account", "members", "signin", "tokens", "about"] as const;
 type Route = { page: "jobs" | (typeof PAGES)[number] } | { page: "job"; id: string };
@@ -197,15 +200,8 @@ function HostsCoverageNote({ file }: { file?: HostsCoverage | null }) {
   }
   if (!file.missing.length) return null;
   return (
-    <Callout
-      tone="warning"
-      title={t("hostsCoverageNote.inTheHostsFileNo", {
-        length: file.missing.length,
-        value: file.missing.length === 1 ? "server" : "servers",
-        value2: file.missing.length === 1 ? "has" : "have",
-      })}
-    >
-      {file.missing.map((h) => h.name).join(", ")}. Define a job whose name or source names the server, such as db-1:/var/lib/postgresql.
+    <Callout tone="warning" title={t("hostsCoverageNote.inTheHostsFileNo", { count: file.missing.length })}>
+      {file.missing.map((h) => h.name).join(", ")}. {t("hostsCoverageNote.whatToDo")}
     </Callout>
   );
 }
@@ -513,7 +509,7 @@ function JobPage({ call, id, reload }: { call: Call; id: string; reload: () => v
         description={
           job
             ? msg("jobPage.everyHMayLoseH", {
-                value: job.source || "No source described",
+                value: job.source || msg("jobPage.noSourceDescribed"),
                 value2: job.location ? ` → ${job.location}` : "",
                 cadenceHours: job.cadenceHours,
                 rpoHours: job.rpoHours,
@@ -541,7 +537,13 @@ function JobPage({ call, id, reload }: { call: Call; id: string; reload: () => v
           />
           <KpiCard
             label={msg("jobPage.lastRestoreTest")}
-            value={job.lastRestoreTest ? (job.lastRestoreTest.ok ? `${job.lastRestoreTest.ageDays} d ago` : "Failed") : "Never"}
+            value={
+              job.lastRestoreTest
+                ? job.lastRestoreTest.ok
+                  ? msg("jobPage.daysAgo", { days: job.lastRestoreTest.ageDays })
+                  : msg("jobPage.failed")
+                : msg("jobPage.never")
+            }
             tone={job.lastRestoreTest?.ok ? "success" : "info"}
           />
           <KpiCard label={msg("jobPage.size")} value={bytes(job.sizeBytes)} />
@@ -552,7 +554,7 @@ function JobPage({ call, id, reload }: { call: Call; id: string; reload: () => v
         <Panel title={msg("jobPage.sizeOfEachBackup")}>
           <TimeSeriesChart
             label={msg("jobPage.sizeOfEachBackupOf", { value: job?.name ?? "the job" })}
-            series={[{ id: "size", name: "Size", data: sized.map((r) => r.sizeBytes ?? 0) }]}
+            series={[{ id: "size", name: msg("jobPage.size"), data: sized.map((r) => r.sizeBytes ?? 0) }]}
             labels={sized.map((r) => new Date(r.endedAt).toLocaleDateString())}
             format={bytes}
             area
@@ -821,11 +823,14 @@ function SettingsPage({ page }: { page: "account" | "members" | "signin" | "toke
 function Product() {
   const msg = useT();
   const [theme, setTheme] = useThemePreference();
+  const [, setLocale] = useLocalePreference();
   const { me, can } = useAuth();
+  const account = useAccountMenu();
   const route = parseRoute(usePath());
   const [summary, setSummary] = useState<Summary>();
   const [products, setProducts] = useState<Array<ProductLink & { id: ProductId }>>([]);
   const call = useApi();
+  const onSearch = useMemo(() => search(call, msg), [call, msg]);
 
   // The install's other products (OPENASY_PRODUCTS), for the switcher; ids this UI does not know are left out.
   useEffect(() => {
@@ -845,7 +850,6 @@ function Product() {
 
   const nav = [{ id: "jobs", label: msg("product.jobs"), icon: DatabaseBackup, count: summary?.jobs }];
   const footerNav = [
-    { id: "setup", label: msg("product.setup"), icon: Settings2 },
     { id: "settings", label: msg("product.settings"), icon: SlidersHorizontal },
     ...(can("admin")
       ? [
@@ -862,6 +866,7 @@ function Product() {
   return (
     <AppShell
       product="backups"
+      onSearch={onSearch}
       about={colophon}
       nav={nav}
       activeNav={active}
@@ -871,10 +876,12 @@ function Product() {
         const to = products.find((p) => p.id === id);
         if (to) window.location.assign(to.url);
       }}
-      footerNav={footerNav}
-      user={{ name: me.user.name, role: roleName }}
+      footerNav={account.settings(footerNav)}
+      setup
+      user={{ name: me.user.name, role: roleName, ...account.user }}
       theme={theme}
       onThemeChange={setTheme}
+      onLanguageChange={(code) => setLocale(toLocale(code))}
     >
       {route.page === "jobs" && summary && summary.jobs === 0 && !summary.autoCreate ? (
         <WelcomePage />
@@ -896,9 +903,10 @@ function Product() {
 export function App() {
   const installBrand = useInstallBrand();
   const [theme] = useThemePreference();
+  const [locale] = useLocalePreference();
   return (
     // The install's brand from config/brand.env (ADR 0053); OpenAsy's own look where it sets none.
-    <BrandProvider theme={theme} brand={{ name: "OpenAsy", organization: undefined, ...installBrand }} className="min-h-screen">
+    <BrandProvider theme={theme} locale={locale} brand={{ name: "OpenAsy", organization: undefined, ...installBrand }} className="min-h-screen">
       <AuthGate product="OpenAsy Backups">
         <Product />
       </AuthGate>
