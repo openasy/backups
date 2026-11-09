@@ -165,7 +165,11 @@
     "atRisk": "At risk",
     "late": "Late",
     "untested": "Untested",
-    "noRestoreHasBeenTested": ": no restore has been tested lately, or the last one failed. A warning counts as a backup that was made."
+    "noRestoreHasBeenTested": ": no restore has been tested lately, or the last one failed. A warning counts as a backup that was made.",
+    "failingMeans": ": the last runs all failed.",
+    "atRiskMeans": ": the last backup is older than the hours the job may lose.",
+    "lateMeans": ": older than one and a half times how often it should run.",
+    "metricsHasEachJob": "/metrics has each job's state and last success for Prometheus, to alert on."
   },
   "welcomePage": {
     "getStarted": "Get started",

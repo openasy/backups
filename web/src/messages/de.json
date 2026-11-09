@@ -165,7 +165,11 @@
     "atRisk": "Gefährdet",
     "late": "Verspätet",
     "untested": "Ungetestet",
-    "noRestoreHasBeenTested": ": In letzter Zeit wurde keine Wiederherstellung getestet, oder die letzte ist fehlgeschlagen. Eine Warnung zählt als erstellte Sicherung."
+    "noRestoreHasBeenTested": ": In letzter Zeit wurde keine Wiederherstellung getestet, oder die letzte ist fehlgeschlagen. Eine Warnung zählt als erstellte Sicherung.",
+    "failingMeans": ": Die letzten Läufe sind alle fehlgeschlagen.",
+    "atRiskMeans": ": Die letzte Sicherung ist älter als die Stunden, die der Job verlieren darf.",
+    "lateMeans": ": älter als das Anderthalbfache des Abstands, in dem er laufen soll.",
+    "metricsHasEachJob": "/metrics liefert Prometheus den Zustand und den letzten Erfolg jedes Jobs, um darauf zu alarmieren."
   },
   "welcomePage": {
     "getStarted": "Erste Schritte",

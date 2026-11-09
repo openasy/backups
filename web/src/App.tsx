@@ -924,14 +924,16 @@ curl -sf -X POST -H "Authorization: Bearer $BACKUPS_INGEST_TOKEN" -H 'content-ty
       <Panel title={t("setupPage.whatTheStatesMean")}>
         <ul className="backups-list flex flex-col gap-1 text-sm text-fg-muted">
           <li>
-            <b>{t("setupPage.failing")}</b>: the last runs all failed. <b>{t("setupPage.atRisk")}</b>: the last backup is older than the hours the job may lose.{" "}
-            <b>{t("setupPage.late")}</b>: older than one and a half times how often it should run.
+            <b>{t("setupPage.failing")}</b>
+            {t("setupPage.failingMeans")} <b>{t("setupPage.atRisk")}</b>
+            {t("setupPage.atRiskMeans")} <b>{t("setupPage.late")}</b>
+            {t("setupPage.lateMeans")}
           </li>
           <li>
             <b>{t("setupPage.untested")}</b>
             {t("setupPage.noRestoreHasBeenTested")}
           </li>
-          <li>/metrics has each job's state and last success for Prometheus, to alert on.</li>
+          <li>{t("setupPage.metricsHasEachJob")}</li>
         </ul>
       </Panel>
     </>

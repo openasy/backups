@@ -165,7 +165,11 @@
     "atRisk": "Riskte",
     "late": "Gecikmiş",
     "untested": "Test edilmemiş",
-    "noRestoreHasBeenTested": ": son zamanlarda hiçbir geri yükleme test edilmedi ya da sonuncusu başarısız oldu. Bir uyarı, alınmış bir yedek sayılır."
+    "noRestoreHasBeenTested": ": son zamanlarda hiçbir geri yükleme test edilmedi ya da sonuncusu başarısız oldu. Bir uyarı, alınmış bir yedek sayılır.",
+    "failingMeans": ": son çalışmaların hepsi başarısız oldu.",
+    "atRiskMeans": ": son yedek, işin kaybetmeye izin verdiği saatlerden daha eski.",
+    "lateMeans": ": çalışması gereken aralığın bir buçuk katından daha eski.",
+    "metricsHasEachJob": "/metrics, uyarı kurabilmeniz için her işin durumunu ve son başarılı çalışmasını Prometheus'a verir."
   },
   "welcomePage": {
     "getStarted": "Başlayın",
