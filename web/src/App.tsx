@@ -71,7 +71,7 @@ import {
   type Overview,
 } from "./api.ts";
 import { bytes, duration } from "./format.ts";
-import { useT, type T } from "./i18n.ts";
+import { useT, type T, viewerLocale, setViewerLocale } from "./i18n.ts";
 import { search } from "./search.ts";
 
 const PAGES = ["settings", "setup", "account", "members", "signin", "tokens", "about"] as const;
@@ -237,7 +237,7 @@ function OverviewPage({ call, summary }: { call: Call; summary?: Summary }) {
   const [o, setO] = useState<Overview>();
   useEffect(() => void call<Overview>("/api/v1/overview").then(setO, () => {}), [call, summary]);
   const s = summary;
-  const day = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+  const day = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString(viewerLocale(), { month: "short", day: "numeric", timeZone: "UTC" });
   const runs = o ? o.days.reduce((n, d) => n + d.success + d.warning + d.failed, 0) : 0;
   const worked = o ? o.days.reduce((n, d) => n + d.success + d.warning, 0) : 0;
   const tests = o ? o.restoreTests.ok + o.restoreTests.failed : 0;
@@ -725,7 +725,7 @@ function JobPage({ call, id, reload }: { call: Call; id: string; reload: () => v
           <TimeSeriesChart
             label={msg("jobPage.sizeOfEachBackupOf", { value: job?.name ?? "the job" })}
             series={[{ id: "size", name: msg("jobPage.size"), data: sized.map((r) => r.sizeBytes ?? 0) }]}
-            labels={sized.map((r) => new Date(r.endedAt).toLocaleDateString())}
+            labels={sized.map((r) => new Date(r.endedAt).toLocaleDateString(viewerLocale()))}
             format={bytes}
             area
             height={160}
@@ -765,7 +765,7 @@ function JobPage({ call, id, reload }: { call: Call; id: string; reload: () => v
           <Button icon={<Trash2 />} onClick={() => setRemoving(true)}>
             {msg("jobPage.deleteJob")}
           </Button>
-          {error && <span className="ml-2 text-xs text-danger">{error}</span>}
+          {error && <span className="ms-2 text-xs text-danger">{error}</span>}
         </div>
       )}
       {testing && job && (
@@ -1081,6 +1081,7 @@ export function App() {
   const installBrand = useInstallBrand();
   const [theme] = useThemePreference();
   const [locale] = useLocalePreference();
+  setViewerLocale(locale);
   return (
     // The install's brand from config/brand.env (ADR 0053); OpenAsy's own look where it sets none.
     <BrandProvider theme={theme} locale={locale} brand={{ name: "OpenAsy", organization: undefined, ...installBrand }} className="min-h-screen">
